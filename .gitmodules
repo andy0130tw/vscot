@@ -1,0 +1,3 @@
+[submodule "vendor/cmstate"]
+	path = vendor/cmstate
+	url = https://github.com/codemirror/state.git

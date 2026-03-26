@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "strict": false,
+    "composite": true
+  },
+  "include": ["./vendor/cmstate/src/**/*.ts"]
+}

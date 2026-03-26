@@ -1,0 +1,17 @@
+{
+  "name": "vscot",
+  "description": "Range mapper for VS Code extensions",
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "module",
+  "author": "qbane",
+  "scripts": {
+    "compile": "tsc -b",
+    "build": "tsdown"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.110.0",
+    "tsdown": "^0.21.5",
+    "typescript": "^6.0.2"
+  }
+}
