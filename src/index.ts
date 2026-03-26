@@ -14,7 +14,13 @@ import {
 } from 'vscode'
 
 
-function vscGetDocumentLength(doc: TextDocument) {
+// [IMPORTANT CAVEAT]:
+// In CodeMirror, the line separator is always one unit wide, independent of line separator.
+// In order to convert between VS Code's position and offsets without the need to peek the content,
+// we hardcode the line separator to '\n' and it supports CRLF transparently.
+// Also, changing the line separator is a full-document rewrite, and it wipes all ranges anyway.
+
+export function vscGetDocumentLength(doc: TextDocument) {
   const eod = doc.validatePosition(new Position(doc.lineCount, 0))
   return doc.offsetAt(eod)
 }
@@ -27,39 +33,27 @@ export function vscChangeEventToChangeSpec(evt: TextDocumentContentChangeEvent):
   }
 }
 
-export class VscEditTracker implements Disposable {
-  lineSep: string
-  changeSet: ChangeSet
-  _disposable: Disposable | undefined
+type TrackerStore = {
+  readonly trackers: Set<VscEditTracker>
+  lenPrev: number
+}
 
-  private constructor(readonly doc: TextDocument) {
-    this.lineSep = doc.eol === 1 ? '\n' : '\r\n'
+export class VscEditTracker implements Disposable {
+  changeSet: ChangeSet
+  private isDisposed = false
+
+  constructor(
+    readonly doc: TextDocument,
+    private readonly onDispose?: (tracker: VscEditTracker) => void,
+  ) {
     this.changeSet = ChangeSet.empty(0)
   }
 
   static create(doc: TextDocument) {
-    const vscet = new VscEditTracker(doc)
-    vscet.listen()
-    return vscet
+    return defaultRegistry.track(doc)
   }
 
-  // FIXME: should create a single listener and route docs
-  listen() {
-    if (this._disposable) {
-      throw new Error('already listened')
-    }
-    let lenPrev = vscGetDocumentLength(this.doc)
-    this._disposable = workspace.onDidChangeTextDocument(e => {
-      // TODO: handle reason (undo/redo)
-      if (e.document !== this.doc) return
-      this.absorb(e.contentChanges, lenPrev)
-      lenPrev = vscGetDocumentLength(this.doc)
-    })
-    this.flush()
-  }
-
-  private absorb(evts: readonly TextDocumentContentChangeEvent[], startLen: number) {
-    const cs = ChangeSet.of(evts.map(vscChangeEventToChangeSpec), startLen, this.lineSep)
+  absorbChangeSet(cs: ChangeSet) {
     this.changeSet = this.changeSet.compose(cs)
   }
 
@@ -79,14 +73,95 @@ export class VscEditTracker implements Disposable {
   }
 
   dispose() {
-    if (this._disposable) {
-      return this._disposable.dispose()
-    }
+    if (this.isDisposed) return
+    this.isDisposed = true
+    this.onDispose?.(this)
   }
 }
 
-export class DecorationFromVsc extends RangeValue {
-  constructor(readonly renderOptions: DecorationRenderOptions) {
+export class VscDocumentRegistry implements Disposable {
+  private readonly stores = new Map<TextDocument, TrackerStore>()
+  private readonly changeListener: Disposable
+  private readonly closeListener: Disposable
+  private isDisposed = false
+
+  constructor() {
+    this.changeListener = workspace.onDidChangeTextDocument(e => {
+      const store = this.stores.get(e.document)
+      if (!store) return
+
+      // TODO: handle reason (undo/redo)
+      const cs = ChangeSet.of(
+        e.contentChanges.map(vscChangeEventToChangeSpec),
+        store.lenPrev,
+        // see [IMPORTANT CAVEAT]
+        '\n',
+      )
+      for (const tracker of store.trackers) {
+        tracker.absorbChangeSet(cs)
+      }
+      store.lenPrev = vscGetDocumentLength(e.document)
+    })
+
+    this.closeListener = workspace.onDidCloseTextDocument(doc => {
+      this.stores.delete(doc)
+    })
+  }
+
+  track(doc: TextDocument) {
+    if (this.isDisposed) {
+      throw new Error('document registry is disposed')
+    }
+
+    let store = this.stores.get(doc)
+    if (!store) {
+      store = {
+        trackers: new Set(),
+        lenPrev: vscGetDocumentLength(doc),
+      }
+      this.stores.set(doc, store)
+    }
+
+    const tracker = new VscEditTracker(doc, current => {
+      const currentStore = this.stores.get(doc)
+      if (!currentStore) return
+      currentStore.trackers.delete(current)
+      if (currentStore.trackers.size === 0) {
+        this.stores.delete(doc)
+      }
+    })
+    store.trackers.add(tracker)
+    return tracker
+  }
+
+  dispose() {
+    if (this.isDisposed) return
+    this.isDisposed = true
+    this.changeListener.dispose()
+    this.closeListener.dispose()
+
+    for (const store of this.stores.values()) {
+      for (const tracker of store.trackers) {
+        tracker.dispose()
+      }
+    }
+    this.stores.clear()
+  }
+}
+
+const defaultRegistry = new VscDocumentRegistry()
+
+export function registerVscDocumentRegistry(subscriptions?: { push(value: Disposable): unknown }) {
+  const registry = new VscDocumentRegistry()
+  subscriptions?.push(registry)
+  return registry
+}
+
+export class DecorationFromVsc<T> extends RangeValue {
+  constructor(
+    readonly data: T,
+    readonly renderOptions: DecorationRenderOptions,
+  ) {
     super()
     const rb = renderOptions.rangeBehavior
     const DRB = DecorationRangeBehavior
