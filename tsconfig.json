@@ -1,14 +1,17 @@
 {
-  // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
     // File Layout
     // "rootDir": "./src",
     // "outDir": "./dist",
 
+    "allowJs": true,
+    "checkJs": true,
+
     // Environment Settings
     // See also https://aka.ms/tsconfig/module
-    "module": "nodenext",
+    "module": "preserve",
     "target": "esnext",
+    "moduleResolution": "bundler",
     "types": [],
     // For nodejs:
     // "lib": ["esnext"],
@@ -20,10 +23,6 @@
     "sourceMap": true,
     "declaration": true,
     "declarationMap": true,
-
-    // Stricter Typechecking Options
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
 
     // Style Options
     // "noImplicitReturns": true,
@@ -39,15 +38,9 @@
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
     "skipLibCheck": true,
-
-    "paths": {
-      "$cmstate/*": ["./vendor/cmstate/src/*"]
-    }
   },
   "include": [
-    "src/**/*.ts"
-  ],
-  "references": [
-    {"path": "./tsconfig.cmstate.json"},
+    "src/**/*.ts",
+    "src/cm/index.js"
   ]
 }

@@ -1,5 +1,5 @@
-import { ChangeSet, type ChangeSpec, MapMode } from '$cmstate/change.js'
-import { RangeValue, RangeSet } from '$cmstate/rangeset.js'
+import type { ChangeSpec } from './cm'
+import { ChangeSet, MapMode, RangeValue, RangeSet } from './cm'
 import type {
   Disposable,
   Range as VscRange,

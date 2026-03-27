@@ -6,7 +6,8 @@
   "type": "module",
   "author": "qbane",
   "scripts": {
-    "compile": "tsc -b",
+    "preinstall": "cp vendor/cmstate/{change,rangeset,text}.ts src/cm",
+    "tsc": "tsc",
     "build": "tsdown"
   },
   "devDependencies": {

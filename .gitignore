@@ -1,3 +1,7 @@
 node_modules/
 /dist
 *.tsbuildinfo
+
+/src/cm/*
+!/src/cm/index.js
+!/src/cm/*.d.ts
