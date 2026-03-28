@@ -2,7 +2,9 @@
 
 Compat layer to track VS Code's document offsets across edits with CodeMirror's state library.
 
-Instead of using the bundled file [on npm](https://www.npmjs.com/package/@codemirror/state), the [repository](https://github.com/codemirror/state) of CodeMirror's state library `@codemirror/state` is added as a submodule for optimal treeshaking.
+**Source**: Instead of using the bundled file [on npm](https://www.npmjs.com/package/@codemirror/state), the bundle uses source files from the [repository](https://github.com/codemirror/state) of CodeMirror's state library `@codemirror/state` as a submodule for optimal treeshaking.
+
+**Types**: `src/cm/index.d.ts` uses the generated types from CodeMirror's built package v6.6.0 for easy referencing type definitions and documentations. Care should be taken of duplicate type definitions.
 
 # Setup
 
@@ -10,5 +12,3 @@ Instead of using the bundled file [on npm](https://www.npmjs.com/package/@codemi
 git submodule update --init
 npm i
 ```
-
-`src/cm/index.d.ts` is copied as-is from CodeMirror's built package v6.6.0 for easy referencing.
