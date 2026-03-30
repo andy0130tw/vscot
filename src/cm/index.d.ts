@@ -614,5 +614,4 @@ A range set builder is a data structure that helps build up a
 an array of [`Range`](https://codemirror.net/6/docs/ref/#state.Range) objects.
 */
 //#endregion
-export { ChangeSet, type ChangeSpec, Line, MapMode, Range, RangeSet, RangeValue, Text };
-//# sourceMappingURL=cmstate.in.d.mts.map
+export { ChangeDesc, ChangeSet, type ChangeSpec, Line, MapMode, Range, RangeSet, RangeValue, Text };
