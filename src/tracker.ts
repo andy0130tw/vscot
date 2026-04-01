@@ -106,6 +106,11 @@ class CheckpointNode {
   }
 }
 
+type Delta = {
+  checkpoint: CheckpointNode
+  changeSet: ChangeSet
+}
+
 export class EditTracker implements Disposable {
   private isDisposed = false
   private oldestCheckpoint: CheckpointNode
@@ -144,16 +149,20 @@ export class EditTracker implements Disposable {
     const doc = this.doc
     const ver = doc.version
     if (this.newestCheckpoint.version === ver) return
+    if (this.newestCheckpoint.version > ver) {
+      throw new Error('attempt to checkpoint a document with version smaller than the last checkpointed one ' +
+        `(${ver} < ${this.newestCheckpoint.version})`)
+    }
 
     const prev = this.newestCheckpoint
     prev.nextVersion = ver
     this.appendNode(ver, CheckpointNode.createFrom(ver, prev))
   }
 
-  getDelta(version: number): {initial: CheckpointNode, changeSet: ChangeSet} {
+  getDelta(version: number): Delta {
     if (version < 0) {
       return {
-        initial: this.newestCheckpoint,
+        checkpoint: this.newestCheckpoint,
         changeSet: this.newestCheckpoint.changeSet,
       }
     }
@@ -175,7 +184,10 @@ export class EditTracker implements Disposable {
       version = checkpoint.nextVersion
     }
 
-    return { initial: checkpoint!, changeSet: changeSet! }
+    return {
+      checkpoint: checkpoint!,
+      changeSet: changeSet!,
+    }
   }
 
   mapVscPos(version: number, pos: Position, assoc?: number): number
@@ -183,7 +195,7 @@ export class EditTracker implements Disposable {
   mapVscPos(version: number, pos: Position, assoc = -1, mapMode = MapMode.Simple): number | null {
     const delta = this.getDelta(version)
 
-    const offs = delta.initial.offsetAt(pos)
+    const offs = delta.checkpoint.offsetAt(pos)
     return delta.changeSet.mapPos(offs, assoc, mapMode)
   }
 
