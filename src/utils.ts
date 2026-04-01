@@ -1,11 +1,19 @@
 import type { TextDocument, TextDocumentChangeEvent, TextDocumentContentChangeEvent } from 'vscode'
 import { Position } from 'vscode'
-import type { ChangeSpec } from './cm'
+import type { ChangeSpec, RangeSet, RangeValue } from './cm'
 import { ChangeSet } from './cm'
 
 export function vscGetDocumentLength(doc: TextDocument) {
   const eod = doc.validatePosition(new Position(doc.lineCount, 0))
   return doc.offsetAt(eod)
+}
+
+export function rangeSetToArray<T extends RangeValue>(rs: RangeSet<T>) {
+  const ranges: {from: number, to: number, value: T}[] = []
+  rs.between(0, 1e10, (from, to, value) => {
+    ranges.push({from, to, value})
+  })
+  return ranges.sort((a, b) => a.from - b.from)
 }
 
 export function vscContentChangeToChangeSpec(evt: TextDocumentContentChangeEvent): ChangeSpec {

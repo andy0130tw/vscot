@@ -39,13 +39,71 @@ export class DecorationFromVsc<T> extends RangeValue {
   }
 }
 
+class LineBreak extends RangeValue {}
+LineBreak.prototype.startSide = 1
+LineBreak.prototype.endSide = -1
+LineBreak.prototype.point = true
 
 class CheckpointNode {
   constructor(
     readonly version: number,
+    readonly lineBreaks: RangeSet<LineBreak>,
     public changeSet: ChangeSet,
     // -1 means newest
     public nextVersion: number = -1) {}
+
+  offsetAt(pos: Position) {
+    if (pos.line == 0) return pos.character
+
+    const nls = this.lineBreaks.iter()
+    for (let i = 1; i < pos.line; i++) {
+      nls.next()
+      if (nls.value == null) {
+        throw new Error('illegal pos')
+      }
+    }
+    return nls.to + pos.character
+  }
+
+  mapRangeSet<T extends RangeValue>(rs: RangeSet<T>): RangeSet<T> {
+    // FIXME
+    return rs.map(this.changeSet)
+  }
+
+  static init(version: number, doc: TextDocument) {
+    const nls = []
+    for (let i = 1; i < doc.lineCount; i++) {
+      const offs = doc.offsetAt(new Position(i, 0))
+      nls.push(new LineBreak().range(offs - doc.eol, offs))
+    }
+
+    return new CheckpointNode(version, RangeSet.of(nls), ChangeSet.empty(vscGetDocumentLength(doc)))
+  }
+
+  static createFrom(version: number, base: CheckpointNode) {
+    // remove newlines that are deleted through edits
+    const cleaned = base.lineBreaks.update({
+      filter: (ff, tt) => base.changeSet.touchesRange(ff, tt) !== 'cover',
+    })
+
+    // add introduced nls in the target coord space
+    const nlsToAdd: Range<LineBreak>[] = []
+    base.changeSet.iterChanges((_fa, _ta, fb, _tb, ins) => {
+      const it = ins.iterLines()
+      it.next()  // skip dummy head
+      let offs = it.value.length + 1
+      it.next()  // skip first line
+      while (!it.done) {
+        nlsToAdd.push(new LineBreak().range(fb + offs - 1, fb + offs))
+        offs += it.value.length + 1
+        it.next()
+      }
+    })
+
+    const newnls = cleaned.map(base.changeSet).update({ add: nlsToAdd })
+
+    return new CheckpointNode(version, newnls, ChangeSet.empty(base.changeSet.newLength))
+  }
 }
 
 export class EditTracker implements Disposable {
@@ -60,7 +118,7 @@ export class EditTracker implements Disposable {
     private readonly onDispose?: (tracker: EditTracker) => void,
   ) {
     const ver = doc.version
-    const node = new CheckpointNode(ver, ChangeSet.empty(vscGetDocumentLength(doc)))
+    const node = CheckpointNode.init(ver, doc)
     this.oldestCheckpoint = node
     this.appendNode(ver, node)
   }
@@ -89,16 +147,25 @@ export class EditTracker implements Disposable {
 
     const prev = this.newestCheckpoint
     prev.nextVersion = ver
-    this.appendNode(ver, new CheckpointNode(ver, ChangeSet.empty(vscGetDocumentLength(doc))))
+    this.appendNode(ver, CheckpointNode.createFrom(ver, prev))
   }
 
-  getDelta(version: number): ChangeSet {
+  getDelta(version: number): {initial: CheckpointNode, changeSet: ChangeSet} {
+    if (version < 0) {
+      return {
+        initial: this.newestCheckpoint,
+        changeSet: this.newestCheckpoint.changeSet,
+      }
+    }
+
     let changeSet: ChangeSet | undefined
+    let checkpoint: CheckpointNode
     while (version >= 0) {
-      let checkpoint = this.checkpointByVersion.get(version)
-      if (!checkpoint) {
+      const cp = this.checkpointByVersion.get(version)
+      if (!cp) {
         throw new Error(`Version ${version} is not checkpointed`)
       }
+      checkpoint = cp
       if (changeSet == null) {
         changeSet = checkpoint.changeSet
       } else {
@@ -108,25 +175,23 @@ export class EditTracker implements Disposable {
       version = checkpoint.nextVersion
     }
 
-    return changeSet!
+    return { initial: checkpoint!, changeSet: changeSet! }
   }
 
-  // TODO: add a param to set version
-  mapPos(pos: Position, assoc?: number): number
-  mapPos(pos: Position, assoc: number, mapMode: MapMode): number | null
-  mapPos(pos: Position, assoc = -1, mapMode = MapMode.Simple): number | null {
-    const offset = this.doc.offsetAt(pos)
-    return this.newestCheckpoint.changeSet.mapPos(offset, assoc, mapMode)
-  }
+  mapVscPos(version: number, pos: Position, assoc?: number): number
+  mapVscPos(version: number, pos: Position, assoc: number, mapMode: MapMode): number | null
+  mapVscPos(version: number, pos: Position, assoc = -1, mapMode = MapMode.Simple): number | null {
+    const delta = this.getDelta(version)
 
-  mapRangeSet<T extends RangeValue>(rs: RangeSet<T>): RangeSet<T> {
-    // FIXME
-    return rs.map(this.newestCheckpoint.changeSet)
+    const offs = delta.initial.offsetAt(pos)
+    return delta.changeSet.mapPos(offs, assoc, mapMode)
   }
 
   dispose() {
     if (this.isDisposed) return
     this.isDisposed = true
+    this.oldestCheckpoint = this.newestCheckpoint = null as any
+    this.checkpointByVersion.clear()
     this.onDispose?.(this)
   }
 }
