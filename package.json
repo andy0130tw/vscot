@@ -6,7 +6,7 @@
   "type": "module",
   "author": "qbane",
   "scripts": {
-    "preinstall": "cp vendor/cmstate/src/{change,rangeset,text}.ts src/cm",
+    "preinstall": "bash -c 'cp vendor/cmstate/src/{change,rangeset,text}.ts src/cm'",
     "build:cmdts": "tsdown --config=tsdown-cmstate.config.ts && cp node_modules/.tmp/cmstate.in.d.mts src/cm/index.d.ts",
     "tsc": "tsc",
     "build": "tsdown"
