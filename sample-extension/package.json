@@ -1,0 +1,25 @@
+{
+  "name": "vscot-sample-extension",
+  "publisher": "qbane",
+  "description": "A sample extension to test",
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "module",
+  "author": "qbane",
+  "main": "dist/extension-entry.cjs",
+  "engines": {
+    "node": ">=22",
+    "vscode": "^1.100.0"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "devDependencies": {
+    "@types/vscode": "^1.91.0",
+    "typescript": "^6.0.2"
+  }
+}

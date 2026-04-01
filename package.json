@@ -5,15 +5,17 @@
   "license": "MIT",
   "type": "module",
   "author": "qbane",
+  "module": "dist/index.mjs",
   "scripts": {
     "preinstall": "bash -c 'cp vendor/cmstate/src/{change,rangeset,text}.ts src/cm'",
     "build:cmdts": "tsdown --config=tsdown-cmstate.config.ts && cp node_modules/.tmp/cmstate.in.d.mts src/cm/index.d.ts",
+    "build:ext": "tsdown --config=tsdown.vsext.config.ts",
     "tsc": "tsc",
     "build": "tsdown"
   },
   "devDependencies": {
     "@codemirror/state": "^6.6.0",
-    "@types/vscode": "^1.110.0",
+    "@types/vscode": "^1.90.0",
     "tsdown": "^0.21.5",
     "typescript": "^6.0.2"
   }

@@ -1,0 +1,3 @@
+# vscot-sample-extension
+
+WIP

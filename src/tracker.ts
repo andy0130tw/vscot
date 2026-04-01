@@ -135,7 +135,7 @@ export class EditTracker implements Disposable {
       // recycle oldest node to keep count = max
       const oldestNode = this.oldestCheckpoint
       const nextNode = this.checkpointByVersion.get(oldestNode.nextVersion)!
-      this.checkpointByVersion.delete(oldestNode.nextVersion)
+      this.checkpointByVersion.delete(oldestNode.version)
       this.oldestCheckpoint = nextNode
     }
   }
