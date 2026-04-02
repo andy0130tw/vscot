@@ -10,7 +10,7 @@ import {
 } from 'vscode'
 import { ChangeSet, MapMode, RangeSet, RangeValue } from './cm'
 import type { Range } from './cm'
-import { vscGetDocumentLength } from './utils'
+import { rangeSetToArray, vscGetDocumentLength } from './utils'
 
 
 export class DecorationFromVsc<T> extends RangeValue {
@@ -48,21 +48,16 @@ class CheckpointNode {
   constructor(
     readonly version: number,
     readonly lineBreaks: RangeSet<LineBreak>,
+    // i-th element is the offset of the (i+1)-th line
+    readonly offsetTable: number[],
     public changeSet: ChangeSet,
     // -1 means newest
     public nextVersion: number = -1) {}
 
+  // NOTE: does not validate position
   offsetAt(pos: Position) {
     if (pos.line == 0) return pos.character
-
-    const nls = this.lineBreaks.iter()
-    for (let i = 1; i < pos.line; i++) {
-      nls.next()
-      if (nls.value == null) {
-        throw new Error('illegal pos')
-      }
-    }
-    return nls.to + pos.character
+    return this.offsetTable[pos.line - 1] + pos.character
   }
 
   mapRangeSet<T extends RangeValue>(rs: RangeSet<T>): RangeSet<T> {
@@ -72,15 +67,17 @@ class CheckpointNode {
 
   static init(version: number, doc: TextDocument) {
     const nls = []
+    const offsets = []
     for (let i = 1; i < doc.lineCount; i++) {
       const offs = doc.offsetAt(new Position(i, 0))
       nls.push(new LineBreak().range(offs - doc.eol, offs))
+      offsets.push(offs)
     }
 
-    return new CheckpointNode(version, RangeSet.of(nls), ChangeSet.empty(vscGetDocumentLength(doc)))
+    return new CheckpointNode(version, RangeSet.of(nls), offsets, ChangeSet.empty(vscGetDocumentLength(doc)))
   }
 
-  static createFrom(version: number, base: CheckpointNode) {
+  static createFrom(version: number, base: CheckpointNode, eol: number) {
     // remove newlines that are deleted through edits
     const cleaned = base.lineBreaks.update({
       filter: (ff, tt) => base.changeSet.touchesRange(ff, tt) !== 'cover',
@@ -94,15 +91,16 @@ class CheckpointNode {
       let offs = it.value.length + 1
       it.next()  // skip first line
       while (!it.done) {
-        nlsToAdd.push(new LineBreak().range(fb + offs - 1, fb + offs))
+        nlsToAdd.push(new LineBreak().range(fb + offs - eol, fb + offs))
         offs += it.value.length + 1
         it.next()
       }
     })
 
     const newnls = cleaned.map(base.changeSet).update({ add: nlsToAdd })
+    const offsets = rangeSetToArray(newnls).map(({to}) => to)
 
-    return new CheckpointNode(version, newnls, ChangeSet.empty(base.changeSet.newLength))
+    return new CheckpointNode(version, newnls, offsets, ChangeSet.empty(base.changeSet.newLength))
   }
 }
 
@@ -156,7 +154,7 @@ export class EditTracker implements Disposable {
 
     const prev = this.newestCheckpoint
     prev.nextVersion = ver
-    this.appendNode(ver, CheckpointNode.createFrom(ver, prev))
+    this.appendNode(ver, CheckpointNode.createFrom(ver, prev, doc.eol))
   }
 
   getDelta(version: number): Delta {
