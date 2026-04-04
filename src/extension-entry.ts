@@ -12,26 +12,39 @@ import { DecorationFromVsc, EditTracker } from './tracker'
 import { vscChangeToChangeSet, rangeSetToArray } from './utils'
 import { RangeSet } from './cm'
 
+interface DocumentState {
+  tracker: EditTracker
+  hira: { range: VscRange, version: number } | null
+}
 
 export function activate(context: ExtensionContext) {
-  const docs = new Map<TextDocument, EditTracker>()
+  const docs = new Map<TextDocument, DocumentState>()
 
   const decoOpts: DecorationRenderOptions = {
     backgroundColor: 'yellow',
     rangeBehavior: DecorationRangeBehavior.OpenOpen,
   }
   const deco = window.createTextEditorDecorationType(decoOpts)
-  let hira: VscRange | null = null
-  let hiraVersion = -1
 
   workspace.onDidChangeTextDocument(evt => {
     try {
       const doc = evt.document
+
+      console.log(doc.version, 'changes',
+        ...evt.contentChanges.map(
+          ({range, rangeOffset, rangeLength, text}) => ({range, rangeOffset, rangeLength, text})))
+
       if (!docs.has(doc)) {
-        docs.set(doc, new EditTracker(doc, 50))
+        docs.set(doc, {
+          tracker: new EditTracker(doc, 50),
+          hira: null,
+        })
+        return
       }
 
-      const tracker = docs.get(doc)!
+      const state = docs.get(doc)!
+      const tracker = state.tracker
+
       tracker.absorb(vscChangeToChangeSet(evt))
 
       if (doc.version % 5 == 0) {
@@ -40,11 +53,12 @@ export function activate(context: ExtensionContext) {
         const text = doc.getText()
         const mat = /\([^]+?\)/.exec(text)
         if (mat) {
-          hira = new VscRange(doc.positionAt(mat.index), doc.positionAt(mat.index + mat[0].length))
-          hiraVersion = doc.version
+          state.hira = {
+            range: new VscRange(doc.positionAt(mat.index), doc.positionAt(mat.index + mat[0].length)),
+            version: doc.version,
+          }
         } else {
-          hira = null
-          hiraVersion = -1
+          state.hira = null
         }
       }
 
@@ -65,9 +79,9 @@ export function activate(context: ExtensionContext) {
         }
       })
 
-      if (hira) {
-        const r1 = tracker.mapVscPos(hiraVersion, hira.start, -1)
-        const r2 = tracker.mapVscPos(hiraVersion, hira.end, 1)
+      if (state.hira) {
+        const r1 = tracker.mapVscPos(state.hira.version, state.hira.range.start, -1)
+        const r2 = tracker.mapVscPos(state.hira.version, state.hira.range.end, 1)
         console.log('range!', r1, r2)
 
         const ranges: DecorationOptions[] = [{ range: new VscRange(doc.positionAt(r1), doc.positionAt(r2)) }]
@@ -78,6 +92,7 @@ export function activate(context: ExtensionContext) {
       }
       console.log(doc.version, tracker)
     } catch (err: any) {
+      console.error('err!', evt)
       window.showErrorMessage(err.message, { modal: true, detail: (err as Error).stack?.slice(0, 1000) })
     }
 
